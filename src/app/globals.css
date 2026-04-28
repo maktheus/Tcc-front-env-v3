@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html {
+    @apply antialiased;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-zinc-950 text-zinc-100;
+  }
+  * {
+    @apply border-zinc-800;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-blue-400;
+  }
+  .glow-green {
+    box-shadow: 0 0 40px -8px theme('colors.brand.500 / 30%');
+  }
+  .glow-violet {
+    box-shadow: 0 0 40px -8px theme('colors.violet.500 / 30%');
+  }
+}
