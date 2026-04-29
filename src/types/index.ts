@@ -63,3 +63,47 @@ export interface SimulatorOutput {
   runtime: string;
   script: string;
 }
+
+export type BenchmarkType = "performance" | "energy" | "accuracy" | "full";
+export type BenchmarkStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
+
+export interface BenchmarkRunConfig {
+  model: string;
+  hardware: string;
+  benchmarkType: BenchmarkType;
+  iterations: number;
+  warmupRuns: number;
+  quantization: string;
+  runtime: string;
+  threads: number;
+  gpuLayers: number;
+  promptTemplate: string;
+}
+
+export interface BenchmarkRunResults {
+  tokensPerSec: number;
+  tokensPerSecMin: number;
+  tokensPerSecMax: number;
+  tokensPerSecStdDev: number;
+  latencyP50: number;
+  latencyP95: number;
+  latencyP99: number;
+  energyW: number;
+  energyWh: number;
+  accuracyPct: number;
+  totalTokens: number;
+  totalDurationMs: number;
+  timeSeriesTokensPerSec: number[];
+  timeSeriesLatency: number[];
+}
+
+export interface LocalBenchmarkRun {
+  id: string;
+  config: BenchmarkRunConfig;
+  status: BenchmarkStatus;
+  startedAt: string;
+  completedAt?: string;
+  results?: BenchmarkRunResults;
+  logs: string[];
+  publishedToCommmunity?: boolean;
+}

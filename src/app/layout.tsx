@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { PlanProvider } from "@/lib/planContext";
+import { BenchmarkProvider } from "@/lib/benchmarkContext";
 
 export const metadata: Metadata = {
   title: "EdgeBench — Benchmarking de LLMs para Edge",
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR">
       <body>
-        <PlanProvider>{children}</PlanProvider>
+        <PlanProvider>
+          <BenchmarkProvider>{children}</BenchmarkProvider>
+        </PlanProvider>
       </body>
     </html>
   );
