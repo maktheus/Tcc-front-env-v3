@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Search, Filter, SlidersHorizontal, ArrowUpDown, BarChart2,
-  Zap, TrendingUp, Plus, X, GitCompare,
+  Zap, TrendingUp, Plus, X, GitCompare, FlaskConical, ChevronRight,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -128,8 +128,13 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <Link href="/simulator">
+            <Link href="/benchmark">
               <Button variant="primary" size="md" className="w-full">
+                <FlaskConical size={14} /> Executar Benchmark Local
+              </Button>
+            </Link>
+            <Link href="/simulator">
+              <Button variant="secondary" size="md" className="w-full">
                 <Zap size={14} /> Simulador de Viabilidade
               </Button>
             </Link>
@@ -137,6 +142,20 @@ export default function DashboardPage() {
 
           {/* Main content */}
           <div className="flex-1 min-w-0">
+            {/* Benchmark local banner */}
+            <Link href="/benchmark">
+              <div className="mb-5 flex items-center justify-between rounded-xl border border-brand-700/50 bg-brand-950/30 px-4 py-3 hover:border-brand-600/60 transition-colors cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <FlaskConical size={16} className="text-brand-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-brand-300">Quer validar esses resultados no seu hardware?</p>
+                    <p className="text-xs text-zinc-500">Execute um benchmark real e compare com os dados da comunidade.</p>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-brand-500 flex-shrink-0 hidden sm:block" />
+              </div>
+            </Link>
+
             {/* Top bar */}
             <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
