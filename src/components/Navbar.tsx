@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/simulator", label: "Simulador" },
   { href: "/community", label: "Comunidade" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/sobre", label: "Sobre" },
   { href: "/pricing", label: "Preços" },
 ];
 
