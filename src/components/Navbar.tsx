@@ -12,6 +12,7 @@ import { usePlan } from "@/lib/planContext";
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/simulator", label: "Simulador" },
+  { href: "/deploy", label: "Deploy" },
   { href: "/community", label: "Comunidade" },
   { href: "/analytics", label: "Analytics" },
   { href: "/pricing", label: "Preços" },

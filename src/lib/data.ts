@@ -249,3 +249,209 @@ export const PLAN_LIMITS: Record<string, number> = {
   team: Infinity,
   enterprise: Infinity,
 };
+
+/* ── COMENTÁRIOS DE BENCHMARK ────────────────────────────── */
+export const BENCHMARK_COMMENTS: Record<string, { author: string; text: string; date: string; upvotes: number }[]> = {
+  b1: [
+    { author: "pedro.alves", text: "Reproduzi com TensorRT 8.6.1 no Orin Nano 8GB. Obtive 36 tok/s — dentro dos ±15%. O throttling térmico começa após ~8 min contínuos, recomendo monitorar com `tegrastats`.", date: "há 3 dias", upvotes: 28 },
+    { author: "ana.souza", text: "Alguém testou com batch_size > 1? Estou vendo ganho de ~1.8x com batch=4 em sequências curtas.", date: "há 2 dias", upvotes: 14 },
+    { author: "rafael.lima", text: "@ana.souza Sim, batch=4 funciona mas a latência de primeira token sobe para ~120ms. Depende do caso de uso — se for inferência síncrona não compensa.", date: "há 1 dia", upvotes: 19 },
+    { author: "juliana.costa", text: "Adicionamos esse modelo ao nosso pipeline de CI/CD com o script do EdgeBench. Economizamos ~6h de configuração manual.", date: "há 18h", upvotes: 31 },
+  ],
+  b2: [
+    { author: "marcos.vieira", text: "Testei no Pi 5 com heatsink ativo e consumo caiu para 4.2W. Passivo bate 5.1W facilmente após 5min.", date: "há 5 dias", upvotes: 22 },
+    { author: "beatriz.santos", text: "Phi-3 Mini é surpreendente para NLU offline. Testei com dataset em português e acurácia ficou em 94.8% — melhor que esperava para Q4_K_M.", date: "há 4 dias", upvotes: 17 },
+  ],
+  b6: [
+    { author: "thiago.mendes", text: "Reproduzido no STM32H743 com CubeAI 8.1. Latência foi 11.8ms — ligeiramente melhor que o benchmark. Arquivo de calibração disponível no GitHub.", date: "há 1 semana", upvotes: 45 },
+    { author: "camila.rocha", text: "@thiago.mendes Obrigada! Atualizei o badge para 'Reproduzível'. O PR com os arquivos de calibração foi aceito.", date: "há 6 dias", upvotes: 38 },
+  ],
+  b7: [
+    { author: "rafael.lima", text: "Pipeline parallel entre dois AGX Orin é complexo de configurar. Criei um guide no fórum com os passos exatos — link na thread #t1.", date: "há 3 dias", upvotes: 67 },
+  ],
+};
+
+/* ── TELEMETRIAS REAIS (exemplos) ───────────────────────── */
+export interface TelemetryEntry {
+  id: string;
+  benchmarkId: string;
+  author: string;
+  estimatedTps: number;
+  realTps: number;
+  estimatedW: number;
+  realW: number;
+  estimatedAccuracy: number;
+  realAccuracy: number;
+  notes: string;
+  date: string;
+}
+
+export const TELEMETRY_DATA: TelemetryEntry[] = [
+  { id: "t1", benchmarkId: "b1", author: "pedro.alves", estimatedTps: 38, realTps: 36, estimatedW: 9.2, realW: 9.8, estimatedAccuracy: 98.8, realAccuracy: 98.4, notes: "Throttling térmico após 8min de carga contínua. Dissipador ativo recomendado.", date: "2024-12-01" },
+  { id: "t2", benchmarkId: "b1", author: "juliana.costa", estimatedTps: 38, realTps: 40, estimatedW: 9.2, realW: 8.9, estimatedAccuracy: 98.8, realAccuracy: 99.0, notes: "TensorRT 8.6.2 — ligeiramente melhor que a estimativa.", date: "2024-12-10" },
+  { id: "t3", benchmarkId: "b2", author: "marcos.vieira", estimatedTps: 14, realTps: 13, estimatedW: 4.8, realW: 5.1, estimatedAccuracy: 97.1, realAccuracy: 96.9, notes: "Heatsink passivo. Recomendo ativo para ambientes >30°C.", date: "2024-11-20" },
+];
+
+/* ── PASSOS DE DEPLOY ───────────────────────────────────── */
+export interface DeployStep {
+  id: number;
+  title: string;
+  description: string;
+  command?: string;
+  warning?: string;
+  tip?: string;
+}
+
+export const DEPLOY_STEPS: Record<string, DeployStep[]> = {
+  "jetson-tensorrt": [
+    { id: 1, title: "Instalar dependências", description: "Instale o JetPack SDK e verifique a versão do TensorRT.", command: "sudo apt-get install tensorrt && python3 -c \"import tensorrt as trt; print(trt.__version__)\"", tip: "JetPack 6.0 inclui TensorRT 8.6. Versões anteriores podem ter performance inferior." },
+    { id: 2, title: "Baixar e quantizar o modelo", description: "Faça download dos pesos e aplique quantização INT4 com llama.cpp.", command: "git clone https://github.com/ggerganov/llama.cpp && cd llama.cpp\nmake -j$(nproc) LLAMA_CUDA=1\npython3 convert_hf_to_gguf.py /path/to/model --outtype q4_k_m", tip: "Use `LLAMA_CUDA=1` para habilitar inferência na GPU do Jetson." },
+    { id: 3, title: "Compilar perfil TensorRT", description: "Gere o engine TensorRT otimizado para o hardware específico.", command: "trtexec --onnx=model.onnx \\\n  --saveEngine=model_int4.engine \\\n  --int8 --fp16 \\\n  --workspace=4096", warning: "A compilação pode levar 10–30 minutos. Não interrompa o processo.", tip: "O engine gerado é específico para a versão do TensorRT e do hardware. Não é portável entre dispositivos." },
+    { id: 4, title: "Executar e validar", description: "Execute a inferência e compare as métricas com as estimativas.", command: "./llama.cpp/main \\\n  -m models/llama-3-8b-q4_k_m.gguf \\\n  -n 256 --temp 0.7 \\\n  --n-gpu-layers 32 \\\n  --log-disable", tip: "Use `tegrastats` em paralelo para monitorar consumo de energia e temperatura." },
+    { id: 5, title: "Enviar telemetria", description: "Registre os resultados reais e compare com as estimativas do EdgeBench.", warning: "A telemetria é opcional mas ajuda a melhorar as estimativas para todos os usuários." },
+  ],
+  "rpi-llamacpp": [
+    { id: 1, title: "Instalar dependências", description: "Compile o llama.cpp com suporte ao Cortex-A76 do Pi 5.", command: "sudo apt-get install -y build-essential cmake\ngit clone https://github.com/ggerganov/llama.cpp && cd llama.cpp\nmake -j4 LLAMA_NATIVE=1" },
+    { id: 2, title: "Baixar modelo quantizado", description: "Baixe o GGUF Q4_K_M direto do HuggingFace.", command: "pip install huggingface_hub\npython3 -c \"\nfrom huggingface_hub import hf_hub_download\nhf_hub_download('microsoft/Phi-3-mini-4k-instruct-gguf', 'Phi-3-mini-4k-instruct-q4.gguf', local_dir='./models')\"" },
+    { id: 3, title: "Executar e validar", description: "Execute com threads otimizados para os 4 cores do Pi 5.", command: "./llama.cpp/main \\\n  -m models/Phi-3-mini-4k-instruct-q4.gguf \\\n  -n 128 --threads 4 \\\n  --ctx-size 2048", tip: "4 threads é o ideal para o Cortex-A76. Mais threads não melhoram a latência." },
+    { id: 4, title: "Enviar telemetria", description: "Registre os resultados reais para validação.", warning: "Telemetria opcional — contribui com a comunidade." },
+  ],
+};
+
+/* ── THREADS DE COMUNIDADE ──────────────────────────────── */
+export interface CommunityThread {
+  id: string;
+  title: string;
+  author: string;
+  hardware: string;
+  upvotes: number;
+  replies: { author: string; text: string; date: string; upvotes: number; isOp?: boolean }[];
+  views: number;
+  tags: string[];
+  isPinned: boolean;
+  isValidated: boolean;
+  date: string;
+  body: string;
+}
+
+export const COMMUNITY_THREADS: CommunityThread[] = [
+  {
+    id: "t1",
+    title: "Llama-3-8B no Jetson Orin Nano: comparação INT4 vs INT8 no mundo real",
+    author: "rafael.lima",
+    hardware: "Jetson Orin Nano",
+    upvotes: 127,
+    views: 1840,
+    tags: ["llm", "quantização", "jetson"],
+    isPinned: true,
+    isValidated: true,
+    date: "há 2 dias",
+    body: `Testei as duas quantizações por 72h em produção em um sistema de resposta a perguntas embarcado num robô industrial.
+
+**Setup:**
+- Jetson Orin Nano 8GB, JetPack 6.0
+- llama.cpp commit a1b2c3d
+- TensorRT 8.6.1
+
+**Resultados INT4 (Q4_K_M):**
+- Throughput: 38 tok/s
+- Consumo: 9.2W
+- Acurácia (MMLU): 98.8%
+- Temperatura máx: 62°C (com heatsink ativo)
+
+**Resultados INT8 (Q8_0):**
+- Throughput: 29 tok/s
+- Consumo: 12.1W
+- Acurácia (MMLU): 99.4%
+- Temperatura máx: 71°C
+
+**Conclusão:** INT4 é 31% mais rápido e 24% mais eficiente. A perda de 0.6% em acurácia é imperceptível no nosso caso de uso. Para aplicações onde a precisão é crítica (diagnóstico médico, etc.) INT8 vale o trade-off.
+
+O script completo de setup está no repositório linkado abaixo.`,
+    replies: [
+      { author: "pedro.alves", text: "Reproduzi com TensorRT 8.6.1. Obtive 36 tok/s — dentro dos ±15%. O throttling térmico começa após ~8 min contínuos. `tegrastats` é essencial.", date: "há 3 dias", upvotes: 28 },
+      { author: "ana.souza", text: "Alguém testou com batch_size > 1? Vejo ganho de ~1.8x com batch=4 em sequências curtas.", date: "há 2 dias", upvotes: 14 },
+      { author: "rafael.lima", text: "@ana.souza Sim, batch=4 funciona mas a latência de primeira token sobe para ~120ms. Para inferência síncrona não compensa.", date: "há 1 dia", upvotes: 19, isOp: true },
+      { author: "juliana.costa", text: "Adicionamos ao nosso CI/CD com o script do EdgeBench. Economizamos ~6h de configuração manual.", date: "há 18h", upvotes: 31 },
+    ],
+  },
+  {
+    id: "t2",
+    title: "TinyLlama no ESP32-S3: consegui 2 tokens/s com 240mW",
+    author: "marcos.vieira",
+    hardware: "ESP32-S3",
+    upvotes: 89,
+    views: 1230,
+    tags: ["mcu", "ultra-low-power", "slm"],
+    isPinned: false,
+    isValidated: false,
+    date: "há 3 dias",
+    body: `Depois de 3 semanas de otimização manual, consegui rodar TinyLlama bare metal no ESP32-S3.
+
+**Modificações necessárias no llama.cpp:**
+1. Desabilitar threading (ESP32 é single-core para inferência)
+2. Reduzir ctx_size para 256 tokens máximo
+3. Implementar quantização manual para 4-bit com tabelas de lookup em flash
+
+**Limitações:**
+- Máximo 256 tokens de contexto
+- Sem suporte a sequências longas
+- RAM pública: apenas 320KB disponível para ativações
+
+Ainda assim, para aplicações ultra-simples (comandos de voz, classificação básica) é viável.`,
+    replies: [
+      { author: "beatriz.santos", text: "Incrível! Você pode compartilhar o diff do llama.cpp? Estou tentando algo similar no STM32.", date: "há 2 dias", upvotes: 12 },
+      { author: "marcos.vieira", text: "@beatriz.santos Sim, vou abrir um PR no repo público esta semana.", date: "há 1 dia", upvotes: 8, isOp: true },
+    ],
+  },
+  {
+    id: "t3",
+    title: "YOLOv8n STM32H7: 12ms de inferência é o limite real?",
+    author: "camila.rocha",
+    hardware: "STM32H7",
+    upvotes: 204,
+    views: 3100,
+    tags: ["vision", "mcu", "cms-nn"],
+    isPinned: false,
+    isValidated: true,
+    date: "há 5 dias",
+    body: `Publicamos o benchmark 12ms/89.3% mAP para YOLOv8n no STM32H743 com CMS-NN.
+
+Vários membros questionaram se é reproduzível — adicionamos o código completo e os arquivos de calibração.
+
+**Pipeline de otimização:**
+1. Exportar YOLOv8n para ONNX
+2. Quantizar para INT8 com calibração (500 imagens COCO)
+3. Converter com STM32Cube.AI 8.1
+4. Deploy com FreeRTOS + DMA para input de câmera
+
+O limite físico do STM32H7 para redes desta complexidade parece ser ~10–14ms. Para latências menores, considere hardware com NPU dedicada (ex: MAX78000).`,
+    replies: [
+      { author: "thiago.mendes", text: "Reproduzido no STM32H743. Latência: 11.8ms. Arquivo de calibração disponível no GitHub.", date: "há 1 semana", upvotes: 45 },
+      { author: "camila.rocha", text: "@thiago.mendes Obrigada! Badge atualizado para 'Reproduzível'.", date: "há 6 dias", upvotes: 38, isOp: true },
+    ],
+  },
+  {
+    id: "t4",
+    title: "[Discussão] Qual o melhor SLM para detecção de intenção offline em Pi 5?",
+    author: "ana.souza",
+    hardware: "Raspberry Pi 5",
+    upvotes: 56,
+    views: 780,
+    tags: ["slm", "raspberry", "nlp"],
+    isPinned: false,
+    isValidated: false,
+    date: "há 1 semana",
+    body: `Preciso de NLU offline com <100ms, <5W e >92% accuracy em português.
+
+Testei:
+- **Phi-3 Mini (Q4_K_M):** 71ms, 4.8W, 94.8% — melhor opção até agora
+- **Gemma-2B (INT8):** 45ms, 3.9W, 92.1% — mais rápido, menor acurácia em PT-BR
+
+Alguém tem experiência com Qwen2-0.5B ou algum modelo fine-tunado para português?`,
+    replies: [
+      { author: "pedro.alves", text: "Qwen2-0.5B no Pi 5 fica em ~35ms mas a acurácia em PT-BR é ~88% sem fine-tuning. Com LoRA + dataset PT-BR chega em 93%.", date: "há 5 dias", upvotes: 21 },
+    ],
+  },
+];
+

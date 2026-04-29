@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Search, Filter, SlidersHorizontal, ArrowUpDown, BarChart2,
-  Zap, TrendingUp, Plus, X, GitCompare,
+  Zap, TrendingUp, Plus, X, GitCompare, ChevronRight,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { usePlan } from "@/lib/planContext";
-import { BENCHMARKS } from "@/lib/data";
+import { BENCHMARKS, HARDWARE_PROFILES } from "@/lib/data";
 
 const HARDWARE_OPTIONS = ["Todos", "Jetson Orin Nano", "Jetson AGX Orin", "Raspberry Pi 5", "ESP32-S3", "STM32H7"];
 const METRIC_OPTIONS = ["Mais upvotes", "Maior tokens/s", "Menor consumo", "Menor latência", "Maior acurácia"];
@@ -109,6 +109,22 @@ export default function DashboardPage() {
                   >
                     #{tag}
                   </button>
+                ))}
+              </div>
+            </Card>
+
+            <Card>
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Perfis de Hardware</p>
+              <div className="space-y-1">
+                {HARDWARE_PROFILES.map((hw) => (
+                  <Link
+                    key={hw.id}
+                    href={`/hardware/${hw.id}`}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors group"
+                  >
+                    <span className="truncate">{hw.name}</span>
+                    <ChevronRight size={13} className="text-zinc-700 group-hover:text-zinc-400 flex-shrink-0" />
+                  </Link>
                 ))}
               </div>
             </Card>

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Zap, Cpu, Battery, Clock, ShieldCheck, Terminal,
-  ChevronRight, AlertTriangle, CheckCircle2, RefreshCw, Download,
+  ChevronRight, AlertTriangle, CheckCircle2, RefreshCw, Download, Package,
 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -14,7 +15,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { usePlan } from "@/lib/planContext";
-import { HARDWARE_PROFILES } from "@/lib/data";
+import { HARDWARE_PROFILES, BENCHMARKS } from "@/lib/data";
 import type { SimulatorOutput } from "@/types";
 
 const MODELS = [
@@ -79,6 +80,17 @@ export default function SimulatorPage() {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const canRun = model && hardware;
+
+  const matchedBenchmarkId = (() => {
+    if (!model || !hardware) return "";
+    const hw = HARDWARE_PROFILES.find((h) => h.id === hardware);
+    const hwName = hw?.name ?? "";
+    const match = BENCHMARKS.find((b) =>
+      b.model.toLowerCase().includes(model.split(" ")[0].toLowerCase()) &&
+      b.hardware.toLowerCase().includes(hwName.split(" ")[0].toLowerCase())
+    );
+    return match?.id ?? "";
+  })();
 
   const handleSimulate = () => {
     if (!canSimulate) { setUpgradeOpen(true); return; }
@@ -359,9 +371,11 @@ export default function SimulatorPage() {
 
                     {/* Actions */}
                     <div className="flex flex-wrap gap-3">
-                      <Button variant="primary" size="md">
-                        Publicar resultado na comunidade
-                      </Button>
+                      <Link href={`/deploy${matchedBenchmarkId ? `?benchmark=${matchedBenchmarkId}` : ""}`}>
+                        <Button variant="primary" size="md">
+                          <Package size={14} /> Deploy esta configuração
+                        </Button>
+                      </Link>
                       <Button variant="secondary" size="md" onClick={handleReset}>
                         Nova simulação
                       </Button>

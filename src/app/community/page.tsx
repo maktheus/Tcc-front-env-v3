@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   MessageSquare, ThumbsUp, Eye, Shield, Star,
   Zap, Plus, Search, TrendingUp, Users, Award,
@@ -212,7 +213,8 @@ export default function CommunityPage() {
             {/* Threads */}
             <div className="space-y-3">
               {filtered.map((t) => (
-                <Card key={t.id} hover className={`cursor-pointer ${t.isPinned ? "border-brand-800/50" : ""}`}>
+                <Link key={t.id} href={`/community/${t.id}`} className="block">
+                <Card hover className={`cursor-pointer ${t.isPinned ? "border-brand-800/50" : ""}`}>
                   <div className="flex items-start gap-4">
                     <div className="flex flex-col items-center gap-1 flex-shrink-0 min-w-[40px]">
                       <button className="flex flex-col items-center text-zinc-600 hover:text-brand-400 transition-colors">
@@ -243,6 +245,7 @@ export default function CommunityPage() {
                     </div>
                   </div>
                 </Card>
+                </Link>
               ))}
             </div>
 

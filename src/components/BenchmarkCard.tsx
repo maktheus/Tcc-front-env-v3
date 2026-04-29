@@ -1,6 +1,7 @@
 "use client";
 
-import { ThumbsUp, CheckCircle, Shield, Zap, Clock, Battery } from "lucide-react";
+import Link from "next/link";
+import { ThumbsUp, CheckCircle, Shield, Zap, Clock, Battery, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import type { BenchmarkResult } from "@/types";
@@ -14,6 +15,7 @@ interface BenchmarkCardProps {
 
 export function BenchmarkCard({ benchmark: b, selected, onToggleSelect, showSelect }: BenchmarkCardProps) {
   return (
+    <Link href={`/benchmark/${b.id}`} className="block">
     <Card hover className={`transition-all ${selected ? "ring-2 ring-brand-500" : ""}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -89,7 +91,7 @@ export function BenchmarkCard({ benchmark: b, selected, onToggleSelect, showSele
           <span className="text-[10px] text-zinc-600">@{b.author}</span>
           {showSelect && (
             <button
-              onClick={onToggleSelect}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSelect?.(); }}
               className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
                 selected
                   ? "bg-brand-500/20 text-brand-400 ring-1 ring-brand-500/40"
@@ -102,5 +104,6 @@ export function BenchmarkCard({ benchmark: b, selected, onToggleSelect, showSele
         </div>
       </div>
     </Card>
+    </Link>
   );
 }
