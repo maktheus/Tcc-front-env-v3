@@ -133,7 +133,7 @@ graph LR
     subgraph CLOUD_JUDGE["Cloud (LLM-as-Judge)"]
         direction TB
         J1["Outputs brutos sobem\npara EdgeBench Cloud"]
-        J2["Judge model\n(GPT-4o / Claude Sonnet)\navalia cada output"]
+        J2["Judge model\n(Claude Sonnet)\navalia cada output"]
         J3["Scores:\n· Coerência (1–10)\n· Factualidade (1–10)\n· Qualidade geral (1–10)\n· Delta vs FP32 baseline"]
 
         J1 --> J2 --> J3
@@ -194,6 +194,24 @@ sequenceDiagram
     API-->>UI: WebSocket {judge_scores} (quando pronto, ~30s)
     UI->>UI: atualiza painel de qualidade com judge scores
 ```
+
+---
+
+## Comparação das duas paths
+
+| | Path A — Local Agent | Path B — WebGPU |
+|---|---|---|
+| Device | Desktop, servidor, Jetson | Qualquer smartphone/tablet moderno |
+| Instalação | `edgebench-agent` (~10 MB) | Zero — só o browser |
+| Modelos | Qualquer tamanho | Somente ≤ 4B params (INT4) |
+| Performance | tok/s · latência · σ | tok/s · latência · σ |
+| Energia | ✅ watts + Wh (RAPL/NVML/INA) | ❌ browser sem acesso a sensores |
+| Perplexidade | ✅ | ✅ |
+| MMLU | ✅ | ✅ |
+| Consistência | ✅ | ✅ |
+| Format Following | ✅ | ✅ |
+| LLM-as-Judge | ✅ (via cloud) | ✅ (via cloud) |
+| Requisitos browser | Qualquer | Chrome 113+ / Safari iOS 17+ (WebGPU) |
 
 ---
 
@@ -259,21 +277,25 @@ erDiagram
 
 ---
 
-## Comparação das duas paths
+## Contrato da API do Agente Local
 
-| | Path A — Local Agent | Path B — WebGPU |
-|---|---|---|
-| Device | Desktop, servidor, Jetson | Qualquer smartphone/tablet moderno |
-| Instalação | `edgebench-agent` (~10 MB) | Zero — só o browser |
-| Modelos | Qualquer tamanho | Somente ≤ 4B params (INT4) |
-| Performance | tok/s · latência · σ | tok/s · latência · σ |
-| Energia | ✅ watts + Wh (RAPL/NVML/INA) | ❌ browser sem acesso a sensores |
-| Perplexidade | ✅ | ✅ |
-| MMLU | ✅ | ✅ |
-| Consistência | ✅ | ✅ |
-| Format Following | ✅ | ✅ |
-| LLM-as-Judge | ✅ (via cloud) | ✅ (via cloud) |
-| Requisitos browser | Qualquer | Chrome 113+ / Safari iOS 17+ (WebGPU) |
+O agente expõe um servidor HTTP em `localhost:4242` consumido exclusivamente pelo browser.
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/health` | Status do agente + hardware detectado |
+| `POST` | `/run` | Inicia benchmark (retorna SSE stream) |
+| `DELETE` | `/run/:id` | Cancela run em andamento |
+| `GET` | `/runs` | Lista runs locais (cache do agente) |
+
+### SSE event schema (POST /run)
+```
+data: {"type":"log",      "line":"[FASE 1/4] Verificando ambiente... ✓"}
+data: {"type":"metrics",  "tokens_per_sec":38,"latency_ms":26,"watts":9.1}
+data: {"type":"quality",  "perplexity":11.3,"mmlu":68.4,"consistency":94.1,"format":96.0}
+data: {"type":"completed","results":{...BenchmarkRunResults}}
+data: {"type":"error",    "message":"model not found"}
+```
 
 ---
 
@@ -288,15 +310,15 @@ graph LR
     end
 
     subgraph AGENT["Agente Local (Path A)"]
-        A1["Go ou Rust\nbinário único ~10 MB"]
+        A1["Go\nbinário único ~10 MB"]
         A2["llama.cpp · TensorRT\nONNX · TFLite"]
         A3["sysinfo · nvml\npowermetrics · RAPL"]
     end
 
     subgraph BACKEND["Cloud Backend"]
-        B1["Fastify (Node.js)\nou FastAPI (Python)"]
+        B1["Fastify (Node.js/TypeScript)"]
         B2["BullMQ + Redis\nfila de jobs"]
-        B3["Judge Pipeline\nOpenAI / Anthropic API"]
+        B3["Judge Pipeline\nAnthropic API (Claude Sonnet)"]
     end
 
     subgraph DATA["Data"]

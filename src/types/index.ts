@@ -64,28 +64,10 @@ export interface SimulatorOutput {
   script: string;
 }
 
-// ─── Execution mode ──────────────────────────────────────────────────────────
-
-/** How the benchmark is executed on the client side */
-export type ExecutionMode = "agent" | "webgpu";
-
-export type BenchmarkType = "performance" | "energy" | "quality" | "full";
+export type BenchmarkType = "performance" | "energy" | "accuracy" | "full";
 export type BenchmarkStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
 
-// ─── WebGPU-compatible models ─────────────────────────────────────────────────
-
-export interface ModelOption {
-  id: string;
-  label: string;
-  size: string;
-  /** Fits in browser VRAM — usable on Path B (WebGPU) */
-  webgpuCompatible: boolean;
-}
-
-// ─── Run config ───────────────────────────────────────────────────────────────
-
 export interface BenchmarkRunConfig {
-  executionMode: ExecutionMode;
   model: string;
   hardware: string;
   benchmarkType: BenchmarkType;
@@ -98,27 +80,7 @@ export interface BenchmarkRunConfig {
   promptTemplate: string;
 }
 
-// ─── Quality metrics ──────────────────────────────────────────────────────────
-
-export interface QualityMetrics {
-  /** Cross-entropy on WikiText-103 slice — lower is better */
-  perplexity: number;
-  /** % correct on 100-question MMLU subset */
-  mmluScorePct: number;
-  /** Cosine similarity across 5 identical prompts — higher = more stable */
-  consistencyPct: number;
-  /** % of runs where the model respected the requested output format */
-  formatFollowingPct: number;
-  /** LLM-as-Judge scores — null until cloud processes (async) */
-  judgeCoherence: number | null;
-  judgeFactuality: number | null;
-  judgeOverall: number | null;
-}
-
-// ─── Run results ──────────────────────────────────────────────────────────────
-
 export interface BenchmarkRunResults {
-  // Performance
   tokensPerSec: number;
   tokensPerSecMin: number;
   tokensPerSecMax: number;
@@ -126,19 +88,14 @@ export interface BenchmarkRunResults {
   latencyP50: number;
   latencyP95: number;
   latencyP99: number;
-  // Energy — null on WebGPU path (no sensor access in browser)
-  energyW: number | null;
-  energyWh: number | null;
-  // Quality
-  quality: QualityMetrics;
-  // Totals
+  energyW: number;
+  energyWh: number;
+  accuracyPct: number;
   totalTokens: number;
   totalDurationMs: number;
   timeSeriesTokensPerSec: number[];
   timeSeriesLatency: number[];
 }
-
-// ─── Full run record ──────────────────────────────────────────────────────────
 
 export interface LocalBenchmarkRun {
   id: string;

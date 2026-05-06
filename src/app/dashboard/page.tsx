@@ -117,8 +117,8 @@ export default function DashboardPage() {
 
             {/* Sidebar upgrade nudge */}
             {!isProOrAbove && (
-              <div className="rounded-xl border border-violet-800/50 bg-violet-950/30 p-4">
-                <p className="text-xs font-semibold text-violet-300 mb-1">Pro: Benchmarks privados</p>
+              <div className="rounded-xl border border-brand-800/40 bg-brand-950/20 p-4">
+                <p className="text-xs font-semibold text-brand-300 mb-1">Pro: Benchmarks privados</p>
                 <p className="text-xs text-zinc-500 mb-3">
                   Publique e acesse benchmarks internos da sua organização sem expor dados.
                 </p>
@@ -307,7 +307,7 @@ export default function DashboardPage() {
                 </table>
               </div>
               {!isProOrAbove && (
-                <div className="mt-4 rounded-xl border border-violet-800/50 bg-violet-950/20 p-3 flex items-center justify-between">
+                <div className="mt-4 rounded-xl border border-brand-800/40 bg-brand-950/20 p-3 flex items-center justify-between">
                   <p className="text-xs text-zinc-400">Pro: compare até 5 modelos e exporte este relatório em PDF</p>
                   <Button variant="upgrade" size="sm" onClick={() => { setShowCompare(false); setUpgradeOpen(true); }}>
                     <Zap size={12} /> Upgrade
