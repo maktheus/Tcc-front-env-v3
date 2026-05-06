@@ -5,7 +5,7 @@ import {
   Play, Square, RotateCcw, Download, Share2, CheckCircle2,
   XCircle, Terminal, Cpu, Zap, Clock, Battery, Target,
   ChevronRight, Trash2, AlertTriangle, BarChart3, History,
-  FlaskConical,
+  FlaskConical, Wifi, WifiOff, Copy, Check as CheckIcon,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area,
@@ -39,6 +39,175 @@ const BENCHMARK_TYPES = [
   { id: "accuracy", label: "Acurácia", icon: Target, desc: "Perda de precisão vs FP32 baseline" },
   { id: "full", label: "Completo", icon: FlaskConical, desc: "Todos os testes acima" },
 ] as const;
+
+const AGENT_URL = "http://localhost:4242";
+
+type AgentStatus = "checking" | "online" | "offline";
+
+interface AgentInfo {
+  version: string;
+  hardware: { id: string; name: string; chip: string; ram: string; tdp: string } | null;
+  runtimes_available: string[];
+}
+
+function useAgentHealth() {
+  const [status, setStatus] = useState<AgentStatus>("checking");
+  const [info, setInfo] = useState<AgentInfo | null>(null);
+
+  const check = useCallback(async () => {
+    setStatus("checking");
+    try {
+      const res = await fetch(`${AGENT_URL}/health`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        const data = await res.json();
+        setInfo(data);
+        setStatus("online");
+      } else {
+        setStatus("offline");
+      }
+    } catch {
+      setStatus("offline");
+    }
+  }, []);
+
+  useEffect(() => { check(); }, [check]);
+
+  return { status, info, retry: check };
+}
+
+const INSTALL_STEPS = [
+  {
+    os: "Linux / macOS",
+    cmd: "curl -sSL https://get.edgebench.io | sh",
+  },
+  {
+    os: "Windows (PowerShell)",
+    cmd: "iwr https://get.edgebench.io/win | iex",
+  },
+  {
+    os: "pip (Python ≥ 3.10)",
+    cmd: "pip install edgebench-agent",
+  },
+];
+
+function AgentBanner({ status, info, onRetry }: { status: AgentStatus; info: AgentInfo | null; onRetry: () => void }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  const copy = (cmd: string) => {
+    navigator.clipboard.writeText(cmd);
+    setCopied(cmd);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  if (status === "checking") {
+    return (
+      <div className="mb-6 flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+        <div className="h-2 w-2 rounded-full bg-zinc-600 animate-pulse" />
+        <span className="text-sm text-zinc-500">Verificando agente local...</span>
+      </div>
+    );
+  }
+
+  if (status === "online") {
+    return (
+      <div className="mb-6 flex items-center justify-between flex-wrap gap-3 rounded-xl border border-brand-700/50 bg-brand-950/20 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Wifi size={15} className="text-brand-400 flex-shrink-0" />
+          <div>
+            <span className="text-sm font-semibold text-brand-300">Agente online</span>
+            {info?.hardware && (
+              <span className="ml-2 text-xs text-zinc-500">
+                {info.hardware.name} · {info.hardware.ram} · {info.hardware.tdp}
+              </span>
+            )}
+          </div>
+          {info?.runtimes_available && info.runtimes_available.length > 0 && (
+            <div className="hidden sm:flex gap-1.5">
+              {info.runtimes_available.map((r) => (
+                <span key={r} className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400">{r}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="text-[10px] text-zinc-600">v{info?.version}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-yellow-800/50 bg-yellow-950/20">
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
+        <div className="flex items-start gap-3">
+          <WifiOff size={15} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-yellow-300">Agente local não detectado</p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Para executar benchmarks reais no seu hardware, instale o{" "}
+              <code className="font-mono text-zinc-400">edgebench-agent</code> e rode{" "}
+              <code className="font-mono text-zinc-400">edgebench agent start</code>.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={onRetry}
+            className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+          >
+            Verificar novamente
+          </button>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-xs text-yellow-400 hover:text-yellow-300 font-semibold"
+          >
+            {expanded ? "Fechar" : "Como instalar"}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-yellow-900/40 px-4 py-4 space-y-3">
+          <p className="text-xs font-semibold text-zinc-400 mb-2">1. Instale o agente</p>
+          {INSTALL_STEPS.map((s) => (
+            <div key={s.os}>
+              <p className="text-[10px] text-zinc-600 mb-1">{s.os}</p>
+              <div className="flex items-center gap-2 rounded-lg bg-zinc-950 px-3 py-2">
+                <code className="flex-1 font-mono text-xs text-zinc-300">{s.cmd}</code>
+                <button
+                  onClick={() => copy(s.cmd)}
+                  className="text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0"
+                >
+                  {copied === s.cmd ? <CheckIcon size={13} className="text-brand-400" /> : <Copy size={13} />}
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <p className="text-xs font-semibold text-zinc-400 mt-4 mb-2">2. Autentique e inicie</p>
+          {[
+            "edgebench auth login",
+            "edgebench agent start",
+          ].map((cmd) => (
+            <div key={cmd} className="flex items-center gap-2 rounded-lg bg-zinc-950 px-3 py-2">
+              <code className="flex-1 font-mono text-xs text-zinc-300">{cmd}</code>
+              <button
+                onClick={() => copy(cmd)}
+                className="text-zinc-600 hover:text-zinc-300 transition-colors flex-shrink-0"
+              >
+                {copied === cmd ? <CheckIcon size={13} className="text-brand-400" /> : <Copy size={13} />}
+              </button>
+            </div>
+          ))}
+          <p className="text-xs text-zinc-600 mt-2">
+            O agente ficará disponível em{" "}
+            <code className="font-mono text-zinc-500">localhost:4242</code>. Clique em{" "}
+            <span className="text-zinc-400">Verificar novamente</span> quando estiver pronto.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function generateBenchmarkLogs(config: BenchmarkRunConfig): { lines: string[]; delaysMs: number[] } {
   const hwName = HARDWARE_PROFILES.find((h) => h.id === config.hardware)?.name ?? config.hardware;
@@ -141,8 +310,10 @@ function generateResults(config: BenchmarkRunConfig): BenchmarkRunResults {
 
 function PhaseSetup({
   onStart,
+  agentStatus,
 }: {
   onStart: (cfg: BenchmarkRunConfig) => void;
+  agentStatus: AgentStatus;
 }) {
   const [model, setModel] = useState("");
   const [hardware, setHardware] = useState("");
@@ -155,7 +326,8 @@ function PhaseSetup({
   const [gpuLayers, setGpuLayers] = useState(32);
 
   const hw = HARDWARE_PROFILES.find((h) => h.id === hardware);
-  const canRun = model && hardware;
+  const agentOnline = agentStatus === "online";
+  const canRun = model && hardware && agentOnline;
 
   const handleStart = () => {
     if (!canRun) return;
@@ -384,7 +556,12 @@ function PhaseSetup({
               <Play size={15} /> Iniciar Benchmark
               <ChevronRight size={14} />
             </Button>
-            {!canRun && (
+            {!agentOnline && (
+              <p className="text-xs text-yellow-600 mt-2 text-center">
+                Agente local necessário para executar benchmarks
+              </p>
+            )}
+            {agentOnline && !canRun && (
               <p className="text-xs text-zinc-600 mt-2 text-center">
                 Selecione modelo e hardware para continuar
               </p>
@@ -857,8 +1034,10 @@ function RunHistoryItem({
 type Phase = "setup" | "running" | "results";
 
 export default function BenchmarkPage() {
-  const { runs, activeRun, startRun, appendLog, completeRun, cancelRun, deleteRun, markPublished } =
+  const { runs, startRun, appendLog, completeRun, cancelRun, deleteRun, markPublished } =
     useBenchmark();
+
+  const { status: agentStatus, info: agentInfo, retry: retryAgent } = useAgentHealth();
 
   const [phase, setPhase] = useState<Phase>("setup");
   const [currentRunId, setCurrentRunId] = useState<string | null>(null);
@@ -976,6 +1155,9 @@ export default function BenchmarkPage() {
           </div>
         </div>
 
+        {/* Agent status banner */}
+        <AgentBanner status={agentStatus} info={agentInfo} onRetry={retryAgent} />
+
         {/* Phase breadcrumb */}
         <div className="mb-6 flex items-center gap-2 text-xs">
           {(["setup", "running", "results"] as Phase[]).map((p, i) => (
@@ -1038,7 +1220,7 @@ export default function BenchmarkPage() {
 
           {/* Main content */}
           <div className={historyOpen ? "lg:col-span-3" : ""}>
-            {phase === "setup" && <PhaseSetup onStart={handleStart} />}
+            {phase === "setup" && <PhaseSetup onStart={handleStart} agentStatus={agentStatus} />}
             {phase === "running" && currentRun && (
               <PhaseRunning run={currentRun} onCancel={handleCancel} />
             )}

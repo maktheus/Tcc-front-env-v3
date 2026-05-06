@@ -2,23 +2,29 @@
 
 ## Visão Geral
 
+O EdgeBench segue o padrão **Local Agent**: um binário leve instalado uma vez pelo usuário
+que permite ao front web (rodando no browser) disparar benchmarks reais no hardware local.
+Não é necessário instalar um desktop app — o front é uma web app normal.
+
 ```mermaid
 graph TB
     subgraph USER["🖥️  Hardware do Usuário"]
         direction TB
-        subgraph TAURI["Tauri Desktop App"]
-            direction LR
-            UI["Next.js UI\n(este front)"]
-            RUST["Tauri Core\n(Rust)"]
-            CLI["Benchmark CLI\nllama.cpp · TensorRT\nONNX · TFLite"]
-            HW["HW Telemetry\nRAIL · NVML\nINA219 · powermetrics"]
+        BROWSER["Browser\nEdgeBench Web App\n(Next.js)"]
 
-            UI <-->|"tauri::invoke()"| RUST
-            RUST -->|"spawn_process()"| CLI
-            RUST -->|"read_sensors()"| HW
-            CLI -->|"stdout metrics"| RUST
-            HW -->|"watts · temp · clock"| RUST
+        subgraph AGENT["edgebench-agent  ~10MB"]
+            direction LR
+            HTTP["HTTP Server\nlocalhost:4242"]
+            RUNNER["Benchmark Runner\nllama.cpp · TensorRT\nONNX · TFLite"]
+            TELEMETRY["HW Telemetry\nRAIL · NVML\nINA219 · powermetrics"]
+
+            HTTP -->|"spawn"| RUNNER
+            HTTP -->|"read"| TELEMETRY
+            RUNNER -->|"stdout metrics"| HTTP
+            TELEMETRY -->|"watts · temp · clock"| HTTP
         end
+
+        BROWSER <-->|"fetch localhost:4242\n(SSE para progresso)"| HTTP
     end
 
     subgraph CLOUD["☁️  EdgeBench Cloud"]
@@ -38,10 +44,10 @@ graph TB
 
         subgraph STORAGE["Storage Layer"]
             direction LR
-            PG["PostgreSQL\nusers · runs\nhardware · community"]
-            TS["TimescaleDB\ntime_series_tps\ntime_series_latency\ntime_series_power"]
+            PG["PostgreSQL 16\nusers · runs\nhardware · community"]
+            TS["TimescaleDB\ntime_series_tps\nlatency · power"]
             RD["Redis\nsessions · queue\ncache"]
-            S3["S3 / R2\nmodel weights\nresult artifacts\nexecution logs"]
+            S3["Cloudflare R2\nresult artifacts\nexecution logs"]
         end
 
         GW --> QUEUE
@@ -50,14 +56,35 @@ graph TB
         WS <--> STORAGE
     end
 
-    RUST <-->|"REST + JWT\nPOST /api/runs"| GW
-    RUST <-->|"WebSocket\nprogress events"| WS
+    AGENT -->|"POST /api/runs/:id/results\n+ hardware_fingerprint (HMAC)"| GW
+    BROWSER <-->|"WebSocket\nresultados validados · community"| WS
 
     style USER fill:#18181b,stroke:#52525b,color:#e4e4e7
-    style TAURI fill:#27272a,stroke:#3f3f46,color:#e4e4e7
+    style AGENT fill:#27272a,stroke:#3f3f46,color:#e4e4e7
     style CLOUD fill:#18181b,stroke:#52525b,color:#e4e4e7
     style PIPELINE fill:#1c1917,stroke:#44403c,color:#e4e4e7
     style STORAGE fill:#1c1917,stroke:#44403c,color:#e4e4e7
+```
+
+---
+
+## Instalação e Onboarding do Agente
+
+```mermaid
+flowchart LR
+    A["Usuário acessa\n/benchmark"] --> B{localhost:4242\nresponde?}
+
+    B -->|não| C["Banner: Agente offline\n+ instruções de instalação"]
+    C --> D["curl install.sh\nou brew / pip / scoop"]
+    D --> E["edgebench auth login\n→ token da conta web"]
+    E --> F["edgebench agent start\n→ localhost:4242 online"]
+    F --> B
+
+    B -->|sim| G["Banner: Agente online ✓\nHardware detectado"]
+    G --> H["Benchmark flow\nnormal"]
+
+    style C fill:#1c1917,stroke:#b45309,color:#fbbf24
+    style G fill:#14532d,stroke:#16a34a,color:#86efac
 ```
 
 ---
@@ -67,50 +94,35 @@ graph TB
 ```mermaid
 sequenceDiagram
     actor U as Usuário
-    participant UI as Next.js UI
-    participant RUST as Tauri (Rust)
+    participant BR as Browser (Next.js)
+    participant AG as edgebench-agent<br/>localhost:4242
     participant CLI as llama.cpp / Runtime
     participant HW as HW Sensors
-    participant API as API Gateway
-    participant WS as WebSocket
-    participant VAL as Validation Pipeline
-    participant DB as PostgreSQL + TimescaleDB
+    participant API as EdgeBench Cloud API
 
-    U->>UI: Clica "Iniciar Benchmark"
-    UI->>RUST: tauri::invoke("start_benchmark", config)
-    RUST->>API: POST /api/runs {config, hardware_fingerprint}
-    API-->>RUST: {run_id, status: "running"}
+    U->>BR: Clica "Iniciar Benchmark"
+    BR->>AG: POST /run {config}
+    AG->>API: POST /api/runs {config, hardware_fingerprint}
+    API-->>AG: {run_id}
 
-    RUST->>CLI: spawn_process(llama.cpp, args)
-    RUST->>HW: start_telemetry_loop()
+    AG->>CLI: spawn_process(llama.cpp, args)
+    AG->>HW: start_telemetry_loop()
 
     loop A cada token gerado
-        CLI-->>RUST: tokens/s · latency_ms
-        HW-->>RUST: watts · temp
-        RUST->>WS: emit("run:progress", {run_id, metrics})
-        WS-->>UI: atualiza terminal + barra de progresso
+        CLI-->>AG: tokens/s · latency_ms
+        HW-->>AG: watts · temp
+        AG-->>BR: SSE: {progress, metrics}
+        BR->>BR: atualiza terminal + barra
     end
 
-    CLI-->>RUST: processo finalizado
-    HW-->>RUST: stop_telemetry()
-    RUST->>RUST: aggregate_results()\ncalc p50/p95/p99/σ\nsign(HMAC)
+    CLI-->>AG: processo finalizado
+    AG->>AG: aggregate_results()<br/>calc p50/p95/p99/σ<br/>sign(HMAC)
+    AG->>API: POST /api/runs/:id/results {payload}
+    AG-->>BR: SSE: {status: "completed", results}
 
-    RUST->>API: POST /api/runs/:id/results {payload_json}
-    API->>VAL: enqueue(run_id)
-
-    VAL->>VAL: validate_schema()
-    VAL->>VAL: verify_fingerprint()
-    VAL->>VAL: detect_anomalies()
-    VAL->>VAL: compute_reproducibility_hash()
-
-    VAL->>DB: INSERT benchmark_runs + time_series
-    VAL->>WS: emit("run:completed", {run_id, status: "validated"})
-    WS-->>UI: exibe resultados + badge de validação
-
-    U->>UI: Clica "Publicar na Comunidade"
-    UI->>API: POST /api/community/posts {run_id}
-    API->>DB: INSERT community_posts
-    API-->>UI: post publicado
+    BR->>BR: exibe resultados + gráficos
+    U->>BR: Clica "Publicar na Comunidade"
+    BR->>API: POST /api/community/posts {run_id}
 ```
 
 ---
@@ -205,26 +217,25 @@ erDiagram
 
 ---
 
-## Confiança nos Resultados (Anti-Fraude)
+## Pipeline de Validação (Anti-Fraude)
 
 ```mermaid
 flowchart LR
-    R["Run recebido\nda API"] --> S1
+    R["Resultado recebido\ndo agente local"] --> S1
 
-    subgraph VALIDATION["Pipeline de Validação"]
+    subgraph VALIDATION["Validation Pipeline"]
         S1["Schema\nValidator\n✓ campos obrigatórios\n✓ tipos corretos\n✓ schema_version"] -->
-        S2["Hardware\nFingerprint\n✓ MAC + CPU/GPU ID\n✓ HMAC signature"] -->
-        S3["Anomaly\nDetector\n✓ tokens/s dentro do\n  range esperado\n  para o hw+modelo"] -->
+        S2["Hardware\nFingerprint\n✓ HMAC signature\n✓ device identity"] -->
+        S3["Anomaly\nDetector\n✓ tokens/s dentro do\n  range esperado\n  para hw + modelo"] -->
         S4["Reproducibility\nHash\nSHA256(model_sha256\n+ config + hw_id\n+ runtime_version)"]
     end
 
-    S4 --> D{Passou\ntudo?}
-
+    S4 --> D{Passou?}
     D -->|sim| V["status: validated\nbadge: ✓ Validado"]
     D -->|não| F["status: flagged\nbadge: ⚠ Em revisão"]
 
-    V --> P["Publicado no\nDashboard público"]
-    F --> PR["Fila de\nPeer Review\n3 runs independentes\n± 15% para aprovar"]
+    V --> P["Dashboard público"]
+    F --> PR["Peer Review\n3 runs independentes\n± 15% para aprovar"]
     PR -->|aprovado| P
     PR -->|reprovado| X["Descartado"]
 
@@ -237,31 +248,68 @@ flowchart LR
 
 ```mermaid
 graph LR
-    subgraph DESKTOP["Desktop (Tauri)"]
-        T1["Next.js 14\nReact · TypeScript\nTailwind"]
-        T2["Rust Core\nsysinfo · nvml-wrapper\npowermetrics"]
-        T3["Binários nativos\nllama.cpp · TensorRT\nONNX Runtime · TFLite"]
+    subgraph LOCAL["Local (usuário)"]
+        L1["edgebench-agent\nbinário único ~10MB\nGo ou Rust"]
+        L2["Runtimes de inferência\nllama.cpp · TensorRT\nONNX · TFLite · STM32Cube.AI"]
+        L3["Browser\nEdgeBench web app"]
     end
 
-    subgraph BACKEND["Backend"]
+    subgraph BACKEND["Backend (Cloud)"]
         B1["Fastify (Node.js)\nou FastAPI (Python)"]
-        B2["BullMQ\n(Redis-backed)"]
-        B3["Socket.io\nWebSocket"]
+        B2["BullMQ + Redis\nfila de jobs"]
+        B3["WebSocket / SSE\nreal-time"]
     end
 
     subgraph DATA["Data"]
         D1["PostgreSQL 16\n+ TimescaleDB"]
         D2["Redis 7"]
-        D3["Cloudflare R2\n(S3-compatible)"]
+        D3["Cloudflare R2\nartifacts · logs"]
     end
 
     subgraph INFRA["Infra"]
-        I1["Railway / Render\n(MVP)"]
-        I2["Kubernetes\n(escala)"]
+        I1["Railway / Render\nMVP"]
+        I2["Kubernetes\nescala"]
         I3["OpenTelemetry\n→ Grafana"]
     end
 
-    DESKTOP --> BACKEND
+    LOCAL --> BACKEND
     BACKEND --> DATA
     BACKEND --> INFRA
+```
+
+---
+
+## Contrato da API do Agente Local
+
+O agente expõe um servidor HTTP em `localhost:4242` consumido exclusivamente pelo browser.
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/health` | Status do agente + hardware detectado |
+| `POST` | `/run` | Inicia benchmark (retorna SSE stream) |
+| `DELETE` | `/run/:id` | Cancela run em andamento |
+| `GET` | `/runs` | Lista runs locais (cache do agente) |
+
+### GET /health — resposta esperada
+```json
+{
+  "status": "online",
+  "version": "0.1.0",
+  "hardware": {
+    "id": "jetson-orin-nano",
+    "name": "Jetson Orin Nano",
+    "chip": "Ampere 1024-core",
+    "ram": "8 GB",
+    "tdp": "10W"
+  },
+  "runtimes_available": ["llama.cpp", "onnxruntime"]
+}
+```
+
+### SSE stream de progresso (POST /run)
+```
+data: {"type":"log","line":"[FASE 1/3] Verificando ambiente... ✓"}
+data: {"type":"log","line":"  Run 1/10 → 38 tok/s | 26ms"}
+data: {"type":"metrics","tokens_per_sec":38,"latency_ms":26,"watts":9.1}
+data: {"type":"completed","results":{...}}
 ```
