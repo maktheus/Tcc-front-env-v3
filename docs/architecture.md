@@ -288,6 +288,51 @@ O agente expõe um servidor HTTP em `localhost:4242` consumido exclusivamente pe
 | `DELETE` | `/run/:id` | Cancela run em andamento |
 | `GET` | `/runs` | Lista runs locais (cache do agente) |
 
+---
+
+## Contrato da API Cloud (backend/)
+
+Servidor Fastify em `localhost:4000` (prod: `api.edgebench.io`).
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/health` | Status do servidor |
+| `POST` | `/api/runs` | Cria registro de run → `{ runId }` |
+| `GET` | `/api/runs` | Leaderboard público (filtros + paginação) |
+| `GET` | `/api/runs/:id` | Run individual com result + time-series |
+| `POST` | `/api/runs/:id/results` | Salva métricas + enfileira judge |
+| `PATCH` | `/api/runs/:id/publish` | Publica run para a comunidade |
+| `DELETE` | `/api/runs/:id` | Cancela ou deleta run |
+| `WS` | `/api/runs/:id/judge` | WebSocket: entrega judge scores (~30s) |
+
+### Fluxo de submissão de resultados
+
+```
+Frontend                          Backend                          Judge Worker
+   │                                 │                                  │
+   │  POST /api/runs                 │                                  │
+   │────────────────────────────────►│                                  │
+   │  ◄── { runId }                  │                                  │
+   │                                 │                                  │
+   │  [benchmark roda localmente]    │                                  │
+   │                                 │                                  │
+   │  POST /api/runs/:id/results     │                                  │
+   │   + rawOutputs[]                │                                  │
+   │────────────────────────────────►│                                  │
+   │  ◄── { ok, judgeJobId }         │                                  │
+   │                                 │  enqueue("judge", { runId, ... })│
+   │                                 │─────────────────────────────────►│
+   │                                 │                                  │
+   │  WS /api/runs/:id/judge         │                                  │
+   │────────────────────────────────►│                                  │
+   │  (aguardando ~30s)              │                                  │
+   │                                 │◄── Claude Sonnet response ───────│
+   │  ◄── { type:"judge_scores",     │    salva no banco                │
+   │        coherence, factuality,   │    broadcastJudgeScores()        │
+   │        overall }                │─────────────────────────────────►│
+   │                                 │                                  │
+```
+
 ### SSE event schema (POST /run)
 ```
 data: {"type":"log",      "line":"[FASE 1/4] Verificando ambiente... ✓"}

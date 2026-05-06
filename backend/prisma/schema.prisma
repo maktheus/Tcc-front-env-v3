@@ -1,0 +1,124 @@
+// EdgeBench Cloud — Prisma schema
+// PostgreSQL 16 + TimescaleDB extension
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  plan      Plan     @default(FREE)
+  createdAt DateTime @default(now()) @map("created_at")
+  runs      BenchmarkRun[]
+
+  @@map("users")
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model Hardware {
+  id          String  @id // e.g. "jetson-orin-nano"
+  name        String  // e.g. "Jetson Orin Nano"
+  chip        String?
+  ramGb       Int?    @map("ram_gb")
+  tdpWatts    Int?    @map("tdp_watts")
+  runs        BenchmarkRun[]
+
+  @@map("hardware")
+}
+
+model BenchmarkRun {
+  id                  String        @id @default(uuid())
+  userId              String?       @map("user_id")
+  hardwareId          String?       @map("hardware_id")
+  executionMode       ExecutionMode @map("execution_mode")
+  model               String
+  quantization        String
+  runtime             String?
+  benchmarkType       String        @map("benchmark_type")
+  iterations          Int
+  warmupRuns          Int           @map("warmup_runs")
+  threads             Int?
+  gpuLayers           Int?          @map("gpu_layers")
+  status              RunStatus     @default(RUNNING)
+  reproducibilityHash String?       @map("reproducibility_hash")
+  hardwareFingerprint String?       @map("hardware_fingerprint")
+  peerReviewed        Boolean       @default(false) @map("peer_reviewed")
+  publishedToCommunity Boolean      @default(false) @map("published_to_community")
+  startedAt           DateTime      @default(now()) @map("started_at")
+  completedAt         DateTime?     @map("completed_at")
+
+  user       User?       @relation(fields: [userId], references: [id])
+  hardware   Hardware?   @relation(fields: [hardwareId], references: [id])
+  result     RunResult?
+  timeSeries TimeSeries[]
+
+  @@index([model, hardwareId, quantization])
+  @@map("benchmark_runs")
+}
+
+enum ExecutionMode {
+  agent
+  webgpu
+}
+
+enum RunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model RunResult {
+  id                    String   @id @default(uuid())
+  runId                 String   @unique @map("run_id")
+  tokenPerSecMean       Float    @map("tokens_per_sec_mean")
+  tokenPerSecStddev     Float    @map("tokens_per_sec_stddev")
+  latencyP50Ms          Int      @map("latency_p50_ms")
+  latencyP95Ms          Int      @map("latency_p95_ms")
+  latencyP99Ms          Int      @map("latency_p99_ms")
+  energyAvgWatts        Float?   @map("energy_avg_watts")
+  energyWhPerInference  Float?   @map("energy_wh_per_inference")
+  perplexity            Float?
+  mmluScorePct          Float?   @map("mmlu_score_pct")
+  consistencyPct        Float?   @map("consistency_pct")
+  formatFollowingPct    Float?   @map("format_following_pct")
+  judgeCoherence        Float?   @map("judge_coherence")
+  judgeFactuality       Float?   @map("judge_factuality")
+  judgeOverall          Float?   @map("judge_overall")
+  totalTokens           Int      @map("total_tokens")
+  totalDurationMs       Int      @map("total_duration_ms")
+  rawOutputsR2Key       String?  @map("raw_outputs_r2_key")
+  judgeJobId            String?  @map("judge_job_id")
+
+  run BenchmarkRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("run_results")
+}
+
+// TimescaleDB hypertable — created via raw SQL migration after prisma migrate
+model TimeSeries {
+  id          BigInt   @id @default(autoincrement())
+  runId       String   @map("run_id")
+  time        DateTime @default(now())
+  runIndex    Int      @map("run_index")
+  tokensPerSec Float   @map("tokens_per_sec")
+  latencyMs   Int      @map("latency_ms")
+  watts       Float?
+
+  run BenchmarkRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, time])
+  @@map("time_series")
+}
