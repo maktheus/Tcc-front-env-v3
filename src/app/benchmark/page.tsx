@@ -538,6 +538,85 @@ function MetricCard({
   );
 }
 
+function exportRunAsJson(run: LocalBenchmarkRun, hw: ReturnType<typeof HARDWARE_PROFILES.find>) {
+  const payload = {
+    schema_version: "1.0.0",
+    exported_at: new Date().toISOString(),
+    tool: "EdgeBench v0.1.0",
+    run: {
+      id: run.id,
+      status: run.status,
+      started_at: run.startedAt,
+      completed_at: run.completedAt ?? null,
+      duration_ms: run.completedAt
+        ? new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime()
+        : null,
+      published_to_community: run.publishedToCommmunity ?? false,
+    },
+    config: {
+      model: run.config.model,
+      hardware: {
+        id: run.config.hardware,
+        name: hw?.name ?? run.config.hardware,
+        chip: hw?.chip ?? null,
+        ram: hw?.ram ?? null,
+        tdp: hw?.tdp ?? null,
+        category: hw?.category ?? null,
+      },
+      benchmark_type: run.config.benchmarkType,
+      iterations: run.config.iterations,
+      warmup_runs: run.config.warmupRuns,
+      quantization: run.config.quantization,
+      runtime: run.config.runtime,
+      threads: run.config.threads,
+      gpu_layers: run.config.gpuLayers,
+      prompt_template: run.config.promptTemplate,
+    },
+    results: run.results
+      ? {
+          performance: {
+            tokens_per_sec: {
+              mean: run.results.tokensPerSec,
+              min: run.results.tokensPerSecMin,
+              max: run.results.tokensPerSecMax,
+              std_dev: run.results.tokensPerSecStdDev,
+            },
+            latency_ms: {
+              p50: run.results.latencyP50,
+              p95: run.results.latencyP95,
+              p99: run.results.latencyP99,
+            },
+          },
+          energy: {
+            avg_watts: run.results.energyW,
+            wh_per_inference: run.results.energyWh,
+          },
+          accuracy: {
+            relative_pct: run.results.accuracyPct,
+            baseline: "FP32",
+          },
+          totals: {
+            tokens_generated: run.results.totalTokens,
+            duration_ms: run.results.totalDurationMs,
+          },
+          time_series: {
+            tokens_per_sec: run.results.timeSeriesTokensPerSec,
+            latency_ms: run.results.timeSeriesLatency,
+          },
+        }
+      : null,
+    logs: run.logs,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `edgebench_${run.config.model.replace(/\s+/g, "-").toLowerCase()}_${run.config.hardware}_${run.id}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function PhaseResults({
   run,
   onReset,
@@ -702,7 +781,7 @@ function PhaseResults({
             <CheckCircle2 size={15} /> Publicado na comunidade
           </div>
         )}
-        <Button variant="secondary" size="md">
+        <Button variant="secondary" size="md" onClick={() => exportRunAsJson(run, hw)}>
           <Download size={14} /> Exportar JSON
         </Button>
         <Button variant="secondary" size="md" onClick={onReset}>
