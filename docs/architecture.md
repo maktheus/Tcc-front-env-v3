@@ -1,128 +1,198 @@
 # EdgeBench — Arquitetura do Sistema
 
-## Visão Geral
+## Duas paths de execução
 
-O EdgeBench segue o padrão **Local Agent**: um binário leve instalado uma vez pelo usuário
-que permite ao front web (rodando no browser) disparar benchmarks reais no hardware local.
-Não é necessário instalar um desktop app — o front é uma web app normal.
+O EdgeBench suporta dois modos de execução que convivem na mesma plataforma.
+A escolha é automática baseada no device do usuário.
+
+```mermaid
+flowchart TB
+    U["Usuário abre EdgeBench"] --> D{Device?}
+
+    D -->|Desktop / Servidor| PA["PATH A\nLocal Agent\n(qualquer modelo)"]
+    D -->|Mobile / Tablet| PB["PATH B\nWebGPU no Browser\n(modelos ≤ 4B)"]
+
+    PA --> EVAL["Avaliação\nPerformance + Qualidade"]
+    PB --> EVAL
+
+    EVAL --> CLOUD["EdgeBench Cloud\nValidação · LLM-as-Judge · Comunidade"]
+```
+
+---
+
+## Path A — Desktop / Servidor (Local Agent)
+
+Para engenheiros rodando modelos em hardware dedicado: Jetson, workstations, servidores.
+Não há limitação de tamanho de modelo. Requer instalação do `edgebench-agent` (~10 MB).
 
 ```mermaid
 graph TB
-    subgraph USER["🖥️  Hardware do Usuário"]
+    subgraph USER_A["🖥️  Desktop / Servidor"]
         direction TB
-        BROWSER["Browser\nEdgeBench Web App\n(Next.js)"]
+        BROWSER_A["Browser\nEdgeBench Web App"]
 
-        subgraph AGENT["edgebench-agent  ~10MB"]
+        subgraph AGENT["edgebench-agent  (localhost:4242)"]
             direction LR
-            HTTP["HTTP Server\nlocalhost:4242"]
-            RUNNER["Benchmark Runner\nllama.cpp · TensorRT\nONNX · TFLite"]
-            TELEMETRY["HW Telemetry\nRAIL · NVML\nINA219 · powermetrics"]
+            HTTP["HTTP + SSE\nServer"]
+            RUNNER["Benchmark Runner\nllama.cpp · TensorRT\nONNX · TFLite\nSTM32Cube.AI"]
+            HW["HW Telemetry\nRAIL · NVML · INA219\npowermetrics (macOS M)"]
+            QUAL_A["Quality Evaluator\nperplexity · MMLU\nconsistency · format"]
 
-            HTTP -->|"spawn"| RUNNER
-            HTTP -->|"read"| TELEMETRY
-            RUNNER -->|"stdout metrics"| HTTP
-            TELEMETRY -->|"watts · temp · clock"| HTTP
+            HTTP --> RUNNER
+            HTTP --> HW
+            HTTP --> QUAL_A
         end
 
-        BROWSER <-->|"fetch localhost:4242\n(SSE para progresso)"| HTTP
+        BROWSER_A <-->|"fetch localhost:4242\nSSE stream"| HTTP
     end
 
-    subgraph CLOUD["☁️  EdgeBench Cloud"]
-        direction TB
-        GW["API Gateway\nFastify / FastAPI"]
-        WS["WebSocket Gateway\nreal-time streaming"]
-        QUEUE["Job Queue\nBullMQ / Temporal"]
-
-        subgraph PIPELINE["Validation Pipeline"]
-            direction LR
-            SCH["Schema\nValidator"]
-            FP["Hardware\nFingerprint"]
-            ANOM["Anomaly\nDetector"]
-            HASH["Reproducibility\nHash"]
-            SCH --> FP --> ANOM --> HASH
-        end
-
-        subgraph STORAGE["Storage Layer"]
-            direction LR
-            PG["PostgreSQL 16\nusers · runs\nhardware · community"]
-            TS["TimescaleDB\ntime_series_tps\nlatency · power"]
-            RD["Redis\nsessions · queue\ncache"]
-            S3["Cloudflare R2\nresult artifacts\nexecution logs"]
-        end
-
-        GW --> QUEUE
-        QUEUE --> PIPELINE
-        PIPELINE --> STORAGE
-        WS <--> STORAGE
+    subgraph RESULTS_A["Resultados (Path A)"]
+        direction LR
+        PERF_A["Performance\ntok/s · latência\np50/p95/p99 · σ"]
+        ENERGY_A["Energia\nwatts · Wh\nper inferência"]
+        QUAL_OUT_A["Qualidade\nperplexidade · MMLU\nconsistência · format\nfollowing"]
     end
 
-    AGENT -->|"POST /api/runs/:id/results\n+ hardware_fingerprint (HMAC)"| GW
-    BROWSER <-->|"WebSocket\nresultados validados · community"| WS
-
-    style USER fill:#18181b,stroke:#52525b,color:#e4e4e7
-    style AGENT fill:#27272a,stroke:#3f3f46,color:#e4e4e7
-    style CLOUD fill:#18181b,stroke:#52525b,color:#e4e4e7
-    style PIPELINE fill:#1c1917,stroke:#44403c,color:#e4e4e7
-    style STORAGE fill:#1c1917,stroke:#44403c,color:#e4e4e7
+    USER_A --> RESULTS_A
 ```
+
+### Modelos suportados (Path A)
+Sem restrição — qualquer modelo que o hardware local suportar.
+
+| Categoria | Exemplos |
+|-----------|----------|
+| SLM (< 4B) | TinyLlama-1.1B, Gemma-2B, Phi-3 Mini |
+| LLM (4B–13B) | Llama-3-8B, Mistral-7B |
+| LLM grande (> 13B) | Llama-3-70B, Mixtral-8x7B |
+| Visão | YOLOv8n, MobileNetV3 |
+| Áudio | Whisper-Small, Whisper-Large |
 
 ---
 
-## Instalação e Onboarding do Agente
+## Path B — Mobile / Tablet (WebGPU no Browser)
+
+Para qualquer pessoa com um smartphone moderno. Zero instalação — o modelo roda
+dentro do browser usando a GPU/NPU do device via WebGPU + WebAssembly (WebLLM / MLC LLM).
 
 ```mermaid
-flowchart LR
-    A["Usuário acessa\n/benchmark"] --> B{localhost:4242\nresponde?}
+graph TB
+    subgraph USER_B["📱  Mobile / Tablet"]
+        direction TB
 
-    B -->|não| C["Banner: Agente offline\n+ instruções de instalação"]
-    C --> D["curl install.sh\nou brew / pip / scoop"]
-    D --> E["edgebench auth login\n→ token da conta web"]
-    E --> F["edgebench agent start\n→ localhost:4242 online"]
-    F --> B
+        subgraph BROWSER_B["Browser (Chrome / Safari iOS 17+)"]
+            direction LR
+            WEBLLM["WebLLM Engine\n(WebGPU + WASM)"]
+            GPU_B["GPU / NPU local\nAdreno · Mali\nApple Neural Engine"]
+            QUAL_B["Quality Evaluator\n(mesmos testes)"]
 
-    B -->|sim| G["Banner: Agente online ✓\nHardware detectado"]
-    G --> H["Benchmark flow\nnormal"]
+            WEBLLM <-->|"WebGPU API"| GPU_B
+            WEBLLM --> QUAL_B
+        end
+    end
 
-    style C fill:#1c1917,stroke:#b45309,color:#fbbf24
-    style G fill:#14532d,stroke:#16a34a,color:#86efac
+    subgraph RESULTS_B["Resultados (Path B)"]
+        direction LR
+        PERF_B["Performance\ntok/s · latência\nVRAM utilizado"]
+        QUAL_OUT_B["Qualidade\nperplexidade · MMLU\nconsistência · format\nfollowing"]
+    end
+
+    USER_B --> RESULTS_B
 ```
+
+### Modelos compatíveis com WebGPU (Path B)
+Limitado a modelos pequenos que cabem na VRAM disponível no browser (~2–4 GB).
+
+| Modelo | Tamanho | Quantização | VRAM est. |
+|--------|---------|-------------|-----------|
+| SmolLM-360M | 360 MB | INT4 | ~0.3 GB |
+| TinyLlama-1.1B | 1.1 B | INT4 | ~0.7 GB |
+| Gemma-1.1B | 1.1 B | INT4 | ~0.8 GB |
+| Gemma-2B | 2 B | INT4 | ~1.5 GB |
+| Phi-3 Mini | 3.8 B | INT4 | ~2.4 GB |
+
+> Nota: Path B **não mede consumo de energia** (browsers não têm acesso a sensores de hardware).
+> Path A mede energia completo via RAPL / NVML / INA219.
 
 ---
 
-## Fluxo de Execução
+## Camada de Qualidade (ambas as paths)
+
+Além das métricas de hardware (tokens/s, watts, latência), o EdgeBench avalia
+a **qualidade do output** do modelo — o quanto a quantização degradou a capacidade real.
+
+```mermaid
+graph LR
+    subgraph LOCAL["No Device (sem cloud)"]
+        direction TB
+        Q1["Perplexidade\nRoda o modelo em corpus fixo\n(WikiText-103 slice 1k tokens)\nMede surpresa média por token\nLower = better"]
+        Q2["MMLU Subset\n100 perguntas múltipla escolha\n(ciências, história, math, CS)\nCompara acerto vs baseline FP32"]
+        Q3["Consistência\nMesma pergunta factual 5×\nCosine similarity entre outputs\n< 80% = modelo instável"]
+        Q4["Format Following\nInstrui formato específico\n(JSON, número, lista)\nValida se respeitou"]
+    end
+
+    subgraph CLOUD_JUDGE["Cloud (LLM-as-Judge)"]
+        direction TB
+        J1["Outputs brutos sobem\npara EdgeBench Cloud"]
+        J2["Judge model\n(GPT-4o / Claude Sonnet)\navalia cada output"]
+        J3["Scores:\n· Coerência (1–10)\n· Factualidade (1–10)\n· Qualidade geral (1–10)\n· Delta vs FP32 baseline"]
+
+        J1 --> J2 --> J3
+    end
+
+    LOCAL -->|"outputs + scores locais"| CLOUD_JUDGE
+
+    style LOCAL fill:#1c1917,stroke:#44403c,color:#e4e4e7
+    style CLOUD_JUDGE fill:#1e1b4b,stroke:#4338ca,color:#c7d2fe
+```
+
+### Referências da literatura moderna
+| Métrica | Paper / Projeto | Ano |
+|---------|----------------|-----|
+| Perplexidade | Padrão desde GPT-2 (Radford et al.) | 2019 |
+| MMLU | Massive Multitask Language Understanding (Hendrycks et al.) | 2021 |
+| LLM-as-Judge / MT-Bench | Judging LLM-as-a-Judge (Zheng et al., LMSYS) | 2023 |
+| G-Eval | NLG Evaluation using GPT-4 (Liu et al.) | 2023 |
+| AlpacaEval | LLM-as-judge for instruction following | 2024 |
+| HELMET | Holistic Evaluation for Long-Context Models | 2024 |
+
+---
+
+## Fluxo de execução unificado
 
 ```mermaid
 sequenceDiagram
     actor U as Usuário
-    participant BR as Browser (Next.js)
-    participant AG as edgebench-agent<br/>localhost:4242
-    participant CLI as llama.cpp / Runtime
-    participant HW as HW Sensors
-    participant API as EdgeBench Cloud API
+    participant UI as Browser (Next.js)
+    participant ENG as Engine<br/>(Agent ou WebGPU)
+    participant API as EdgeBench Cloud
 
-    U->>BR: Clica "Iniciar Benchmark"
-    BR->>AG: POST /run {config}
-    AG->>API: POST /api/runs {config, hardware_fingerprint}
-    API-->>AG: {run_id}
+    U->>UI: Abre /benchmark
+    UI->>UI: detectDevice() → agent | webgpu
+    UI->>ENG: health check / WebGPU probe
 
-    AG->>CLI: spawn_process(llama.cpp, args)
-    AG->>HW: start_telemetry_loop()
+    U->>UI: Configura e inicia benchmark
+    UI->>API: POST /api/runs {config, mode, device}
+    API-->>UI: {run_id}
 
-    loop A cada token gerado
-        CLI-->>AG: tokens/s · latency_ms
-        HW-->>AG: watts · temp
-        AG-->>BR: SSE: {progress, metrics}
-        BR->>BR: atualiza terminal + barra
+    UI->>ENG: start(config)
+
+    loop Inferência (warmup + N iterações)
+        ENG-->>UI: SSE {tokens_per_sec, latency_ms, watts?}
     end
 
-    CLI-->>AG: processo finalizado
-    AG->>AG: aggregate_results()<br/>calc p50/p95/p99/σ<br/>sign(HMAC)
-    AG->>API: POST /api/runs/:id/results {payload}
-    AG-->>BR: SSE: {status: "completed", results}
+    Note over ENG: Avaliação de qualidade local
+    ENG->>ENG: calcular perplexidade
+    ENG->>ENG: rodar MMLU subset (100 q)
+    ENG->>ENG: testar consistência (5×)
+    ENG->>ENG: testar format following
 
-    BR->>BR: exibe resultados + gráficos
-    U->>BR: Clica "Publicar na Comunidade"
-    BR->>API: POST /api/community/posts {run_id}
+    ENG-->>UI: SSE {status: completed, results}
+    UI->>API: POST /api/runs/:id/results {perf + quality + raw_outputs}
+
+    Note over API: LLM-as-Judge (assíncrono)
+    API->>API: enfileira outputs para judge
+    API-->>UI: WebSocket {judge_scores} (quando pronto, ~30s)
+    UI->>UI: atualiza painel de qualidade com judge scores
 ```
 
 ---
@@ -131,28 +201,11 @@ sequenceDiagram
 
 ```mermaid
 erDiagram
-    USERS {
-        uuid id PK
-        string email
-        string username
-        string plan
-        int simulations_used
-        timestamp created_at
-    }
-
-    HARDWARE_PROFILES {
-        string id PK
-        string name
-        string category
-        string chip
-        string ram
-        string tdp
-    }
-
     BENCHMARK_RUNS {
         uuid id PK
         uuid user_id FK
         string hardware_id FK
+        string execution_mode "agent | webgpu"
         string model
         string quantization
         string runtime
@@ -173,15 +226,19 @@ erDiagram
         uuid id PK
         uuid run_id FK
         float tokens_per_sec_mean
-        float tokens_per_sec_min
-        float tokens_per_sec_max
         float tokens_per_sec_stddev
         int latency_p50_ms
         int latency_p95_ms
         int latency_p99_ms
-        float energy_avg_watts
-        float energy_wh_per_inference
-        float accuracy_pct
+        float energy_avg_watts "null para webgpu"
+        float energy_wh_per_inference "null para webgpu"
+        float perplexity
+        float mmlu_score_pct
+        float consistency_pct
+        float format_following_pct
+        float judge_coherence "null até judge processar"
+        float judge_factuality "null até judge processar"
+        float judge_overall "null até judge processar"
         int total_tokens
         int total_duration_ms
     }
@@ -193,123 +250,63 @@ erDiagram
         int run_index
         float tokens_per_sec
         int latency_ms
-        float watts
+        float watts "null para webgpu"
     }
 
-    COMMUNITY_POSTS {
-        uuid id PK
-        uuid run_id FK
-        uuid user_id FK
-        string title
-        text body
-        int upvotes
-        boolean validated
-        timestamp created_at
-    }
-
-    USERS ||--o{ BENCHMARK_RUNS : "executa"
-    HARDWARE_PROFILES ||--o{ BENCHMARK_RUNS : "alvo"
     BENCHMARK_RUNS ||--|| RUN_RESULTS : "produz"
     BENCHMARK_RUNS ||--o{ TIME_SERIES : "gera"
-    BENCHMARK_RUNS ||--o| COMMUNITY_POSTS : "pode gerar"
-    USERS ||--o{ COMMUNITY_POSTS : "publica"
 ```
 
 ---
 
-## Pipeline de Validação (Anti-Fraude)
+## Comparação das duas paths
 
-```mermaid
-flowchart LR
-    R["Resultado recebido\ndo agente local"] --> S1
-
-    subgraph VALIDATION["Validation Pipeline"]
-        S1["Schema\nValidator\n✓ campos obrigatórios\n✓ tipos corretos\n✓ schema_version"] -->
-        S2["Hardware\nFingerprint\n✓ HMAC signature\n✓ device identity"] -->
-        S3["Anomaly\nDetector\n✓ tokens/s dentro do\n  range esperado\n  para hw + modelo"] -->
-        S4["Reproducibility\nHash\nSHA256(model_sha256\n+ config + hw_id\n+ runtime_version)"]
-    end
-
-    S4 --> D{Passou?}
-    D -->|sim| V["status: validated\nbadge: ✓ Validado"]
-    D -->|não| F["status: flagged\nbadge: ⚠ Em revisão"]
-
-    V --> P["Dashboard público"]
-    F --> PR["Peer Review\n3 runs independentes\n± 15% para aprovar"]
-    PR -->|aprovado| P
-    PR -->|reprovado| X["Descartado"]
-
-    style VALIDATION fill:#1c1917,stroke:#44403c,color:#e4e4e7
-```
+| | Path A — Local Agent | Path B — WebGPU |
+|---|---|---|
+| Device | Desktop, servidor, Jetson | Qualquer smartphone/tablet moderno |
+| Instalação | `edgebench-agent` (~10 MB) | Zero — só o browser |
+| Modelos | Qualquer tamanho | Somente ≤ 4B params (INT4) |
+| Performance | tok/s · latência · σ | tok/s · latência · σ |
+| Energia | ✅ watts + Wh (RAPL/NVML/INA) | ❌ browser sem acesso a sensores |
+| Perplexidade | ✅ | ✅ |
+| MMLU | ✅ | ✅ |
+| Consistência | ✅ | ✅ |
+| Format Following | ✅ | ✅ |
+| LLM-as-Judge | ✅ (via cloud) | ✅ (via cloud) |
+| Requisitos browser | Qualquer | Chrome 113+ / Safari iOS 17+ (WebGPU) |
 
 ---
 
-## Stack Completa
+## Stack
 
 ```mermaid
 graph LR
-    subgraph LOCAL["Local (usuário)"]
-        L1["edgebench-agent\nbinário único ~10MB\nGo ou Rust"]
-        L2["Runtimes de inferência\nllama.cpp · TensorRT\nONNX · TFLite · STM32Cube.AI"]
-        L3["Browser\nEdgeBench web app"]
+    subgraph FRONTEND["Front (web + PWA)"]
+        F1["Next.js 14\nReact · TypeScript"]
+        F2["WebLLM / MLC LLM\n(Path B — WebGPU)"]
+        F3["Tailwind · Recharts"]
     end
 
-    subgraph BACKEND["Backend (Cloud)"]
+    subgraph AGENT["Agente Local (Path A)"]
+        A1["Go ou Rust\nbinário único ~10 MB"]
+        A2["llama.cpp · TensorRT\nONNX · TFLite"]
+        A3["sysinfo · nvml\npowermetrics · RAPL"]
+    end
+
+    subgraph BACKEND["Cloud Backend"]
         B1["Fastify (Node.js)\nou FastAPI (Python)"]
         B2["BullMQ + Redis\nfila de jobs"]
-        B3["WebSocket / SSE\nreal-time"]
+        B3["Judge Pipeline\nOpenAI / Anthropic API"]
     end
 
     subgraph DATA["Data"]
         D1["PostgreSQL 16\n+ TimescaleDB"]
-        D2["Redis 7"]
-        D3["Cloudflare R2\nartifacts · logs"]
+        D2["Redis"]
+        D3["Cloudflare R2"]
     end
 
-    subgraph INFRA["Infra"]
-        I1["Railway / Render\nMVP"]
-        I2["Kubernetes\nescala"]
-        I3["OpenTelemetry\n→ Grafana"]
-    end
-
-    LOCAL --> BACKEND
+    FRONTEND --> AGENT
+    FRONTEND --> BACKEND
+    AGENT --> BACKEND
     BACKEND --> DATA
-    BACKEND --> INFRA
-```
-
----
-
-## Contrato da API do Agente Local
-
-O agente expõe um servidor HTTP em `localhost:4242` consumido exclusivamente pelo browser.
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `GET` | `/health` | Status do agente + hardware detectado |
-| `POST` | `/run` | Inicia benchmark (retorna SSE stream) |
-| `DELETE` | `/run/:id` | Cancela run em andamento |
-| `GET` | `/runs` | Lista runs locais (cache do agente) |
-
-### GET /health — resposta esperada
-```json
-{
-  "status": "online",
-  "version": "0.1.0",
-  "hardware": {
-    "id": "jetson-orin-nano",
-    "name": "Jetson Orin Nano",
-    "chip": "Ampere 1024-core",
-    "ram": "8 GB",
-    "tdp": "10W"
-  },
-  "runtimes_available": ["llama.cpp", "onnxruntime"]
-}
-```
-
-### SSE stream de progresso (POST /run)
-```
-data: {"type":"log","line":"[FASE 1/3] Verificando ambiente... ✓"}
-data: {"type":"log","line":"  Run 1/10 → 38 tok/s | 26ms"}
-data: {"type":"metrics","tokens_per_sec":38,"latency_ms":26,"watts":9.1}
-data: {"type":"completed","results":{...}}
 ```
