@@ -178,24 +178,23 @@ export default function HomePage() {
               <div className="h-3 w-3 rounded-full bg-red-500/70" />
               <div className="h-3 w-3 rounded-full bg-yellow-500/70" />
               <div className="h-3 w-3 rounded-full bg-green-500/70" />
-              <span className="ml-2 text-xs text-zinc-600 font-mono">edgebench benchmark</span>
+              <span className="ml-2 text-xs text-zinc-600 font-mono">edgebench-agent — terminal</span>
             </div>
             <div className="p-5 font-mono text-sm space-y-1">
-              <p className="text-zinc-500">$ edgebench benchmark --model llama-3-8b --hw jetson-orin-nano --iter 10</p>
-              <p className="text-zinc-400 mt-3">[FASE 1/3] Verificando ambiente... ✓</p>
-              <p className="text-zinc-400">[FASE 2/3] Warmup (3 runs)... ✓</p>
-              <p className="text-zinc-400">[FASE 3/3] Inferência — coletando métricas...</p>
-              <p className="text-zinc-500 text-xs ml-2">  Run 1/10 → 38 tok/s | 26ms</p>
-              <p className="text-zinc-500 text-xs ml-2">  Run 2/10 → 41 tok/s | 24ms</p>
-              <p className="text-zinc-500 text-xs ml-2">  ...</p>
-              <div className="mt-3 rounded-lg bg-zinc-800/60 p-3 space-y-1">
-                <p className="text-brand-400 font-semibold">[OK] Benchmark concluído (10 iterações)</p>
-                <p className="text-zinc-300">Tokens/s:    <span className="text-brand-400">39.2</span> (min 36 · max 43 · σ 2.1)</p>
-                <p className="text-zinc-300">Latência p50:<span className="text-blue-400"> 25ms</span>  p95: <span className="text-blue-400">31ms</span></p>
-                <p className="text-zinc-300">Consumo:     <span className="text-yellow-400">9.1W</span></p>
-                <p className="text-zinc-300">Acurácia:    <span className="text-purple-400">98.8%</span> vs baseline FP32</p>
+              <p className="text-zinc-600 text-xs"># instale uma vez</p>
+              <p className="text-zinc-400">$ curl -sSL https://get.edgebench.io | sh</p>
+              <p className="text-zinc-500 ml-2 text-xs">✓ edgebench-agent v0.1.0 instalado</p>
+              <p className="text-zinc-400 mt-2">$ edgebench agent start</p>
+              <p className="text-zinc-500 ml-2 text-xs">✓ Agente rodando em localhost:4242</p>
+              <p className="text-zinc-500 ml-2 text-xs">✓ Hardware detectado: Jetson Orin Nano · 8GB · 10W</p>
+              <p className="text-zinc-500 ml-2 text-xs">✓ Runtimes: llama.cpp · TensorRT-LLM</p>
+              <p className="text-zinc-600 text-xs mt-2"># a partir daqui, use o browser normalmente</p>
+              <div className="mt-2 rounded-lg bg-zinc-800/60 p-3 space-y-1">
+                <p className="text-brand-400 font-semibold">[OK] Benchmark concluído — Llama-3-8B · 10 runs</p>
+                <p className="text-zinc-300">Tokens/s: <span className="text-brand-400">39.2</span> (σ 2.1) · p50: <span className="text-blue-400">25ms</span> · p95: <span className="text-blue-400">31ms</span></p>
+                <p className="text-zinc-300">Consumo:  <span className="text-yellow-400">9.1W</span> · Acurácia: <span className="text-purple-400">98.8%</span> vs FP32</p>
               </div>
-              <p className="text-zinc-600 text-xs mt-2">Resultados salvos · Publicar na comunidade? [s/N]</p>
+              <p className="text-zinc-600 text-xs mt-2">Resultados sincronizados com a plataforma ✓</p>
             </div>
           </div>
         </div>
