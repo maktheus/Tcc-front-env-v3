@@ -3,8 +3,9 @@
 import { useState } from "react";
 import {
   Zap, Cpu, Battery, Clock, ShieldCheck, Terminal,
-  ChevronRight, AlertTriangle, CheckCircle2, RefreshCw, Download,
+  ChevronRight, AlertTriangle, CheckCircle2, RefreshCw, Download, FlaskConical,
 } from "lucide-react";
+import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { UsageMeter } from "@/components/UsageMeter";
@@ -356,6 +357,24 @@ export default function SimulatorPage() {
                         </div>
                       </Card>
                     </FeatureGate>
+
+                    {/* Benchmark local CTA */}
+                    <div className="rounded-xl border border-brand-700/50 bg-brand-950/20 p-4 flex items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <FlaskConical size={18} className="text-brand-400 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-semibold text-brand-300">Quer confirmar com dados reais?</p>
+                          <p className="text-xs text-zinc-500">
+                            Execute o benchmark no seu {HARDWARE_PROFILES.find((h) => h.id === hardware)?.name ?? "hardware"} e compare com esta estimativa.
+                          </p>
+                        </div>
+                      </div>
+                      <Link href={`/benchmark`}>
+                        <Button variant="primary" size="sm">
+                          <FlaskConical size={13} /> Executar benchmark real <ChevronRight size={13} />
+                        </Button>
+                      </Link>
+                    </div>
 
                     {/* Actions */}
                     <div className="flex flex-wrap gap-3">

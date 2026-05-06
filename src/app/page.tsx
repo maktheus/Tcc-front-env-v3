@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   Cpu, Zap, BarChart2, Users, Shield, ArrowRight, Check, ChevronRight,
-  Star, TrendingUp, Globe, Lock,
+  Star, TrendingUp, Globe, Lock, FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -20,11 +20,20 @@ const STATS = [
 
 const FEATURES = [
   {
+    icon: FlaskConical,
+    title: "Benchmark no Seu Hardware",
+    description: "Execute benchmarks reais no seu dispositivo: tokens/s, latência p50/p95/p99, consumo e acurácia — não estimativas, dados reais.",
+    badge: "Free",
+    badgeVariant: "green" as const,
+    href: "/benchmark",
+  },
+  {
     icon: BarChart2,
-    title: "Benchmarks em Tempo Real",
+    title: "Benchmarks Públicos Validados",
     description: "Rankings filtráveis por hardware, modelo, técnica de otimização e métrica. Dados validados em produção.",
     badge: "Free",
     badgeVariant: "gray" as const,
+    href: "/dashboard",
   },
   {
     icon: Zap,
@@ -32,6 +41,7 @@ const FEATURES = [
     description: "Informe seu hardware e restrições; receba estimativas de tokens/s, consumo e acurácia antes de qualquer deploy.",
     badge: "3/mês Free · Ilimitado Pro",
     badgeVariant: "blue" as const,
+    href: "/simulator",
   },
   {
     icon: Cpu,
@@ -39,6 +49,7 @@ const FEATURES = [
     description: "Scripts prontos com flags de quantização, pruning e runtime configurados para seu hardware específico.",
     badge: "Pro",
     badgeVariant: "blue" as const,
+    href: "/simulator",
   },
   {
     icon: Users,
@@ -46,6 +57,7 @@ const FEATURES = [
     description: "Fóruns segmentados por hardware e modelo. Sistema de reputação baseado em benchmarks reproduzidos.",
     badge: "Free",
     badgeVariant: "gray" as const,
+    href: "/community",
   },
   {
     icon: TrendingUp,
@@ -53,13 +65,7 @@ const FEATURES = [
     description: "Compare estimativas vs. resultados reais após deploy. Relatórios exportáveis em PDF para equipes.",
     badge: "Pro",
     badgeVariant: "blue" as const,
-  },
-  {
-    icon: Globe,
-    title: "Data Marketplace",
-    description: "Acesse e publique datasets anonimizados de telemetria de edge. GDPR-compliant, opt-in explícito.",
-    badge: "Team+",
-    badgeVariant: "purple" as const,
+    href: "/analytics",
   },
 ];
 
@@ -148,9 +154,9 @@ export default function HomePage() {
             comunidade técnica mais rigorosa do Brasil.
           </p>
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link href="/onboarding">
+            <Link href="/benchmark">
               <Button variant="primary" size="lg" className="w-full sm:w-auto">
-                Começar grátis — sem cartão
+                <FlaskConical size={16} /> Executar benchmark local
                 <ArrowRight size={16} />
               </Button>
             </Link>
@@ -172,21 +178,24 @@ export default function HomePage() {
               <div className="h-3 w-3 rounded-full bg-red-500/70" />
               <div className="h-3 w-3 rounded-full bg-yellow-500/70" />
               <div className="h-3 w-3 rounded-full bg-green-500/70" />
-              <span className="ml-2 text-xs text-zinc-600 font-mono">edgebench simulate</span>
+              <span className="ml-2 text-xs text-zinc-600 font-mono">edgebench benchmark</span>
             </div>
             <div className="p-5 font-mono text-sm space-y-1">
-              <p className="text-zinc-500">$ edgebench simulate --model llama-3-8b --hw jetson-orin-nano --max-watts 10</p>
-              <p className="text-zinc-400 mt-3">Analisando compatibilidade...</p>
-              <p className="text-zinc-400">Aplicando otimizações: INT4 + TensorRT</p>
-              <p className="text-zinc-400">Calculando estimativas...</p>
+              <p className="text-zinc-500">$ edgebench benchmark --model llama-3-8b --hw jetson-orin-nano --iter 10</p>
+              <p className="text-zinc-400 mt-3">[FASE 1/3] Verificando ambiente... ✓</p>
+              <p className="text-zinc-400">[FASE 2/3] Warmup (3 runs)... ✓</p>
+              <p className="text-zinc-400">[FASE 3/3] Inferência — coletando métricas...</p>
+              <p className="text-zinc-500 text-xs ml-2">  Run 1/10 → 38 tok/s | 26ms</p>
+              <p className="text-zinc-500 text-xs ml-2">  Run 2/10 → 41 tok/s | 24ms</p>
+              <p className="text-zinc-500 text-xs ml-2">  ...</p>
               <div className="mt-3 rounded-lg bg-zinc-800/60 p-3 space-y-1">
-                <p className="text-brand-400 font-semibold">✓ Viável</p>
-                <p className="text-zinc-300">Throughput:  <span className="text-brand-400">38 tokens/s</span></p>
-                <p className="text-zinc-300">Consumo:     <span className="text-yellow-400">9.2W</span> (dentro do limite)</p>
-                <p className="text-zinc-300">Acurácia:    <span className="text-purple-400">98.8%</span> (-1.2% vs FP16)</p>
-                <p className="text-zinc-300">Script:      <span className="text-blue-400">./run_llama_int4_trt.sh</span></p>
+                <p className="text-brand-400 font-semibold">[OK] Benchmark concluído (10 iterações)</p>
+                <p className="text-zinc-300">Tokens/s:    <span className="text-brand-400">39.2</span> (min 36 · max 43 · σ 2.1)</p>
+                <p className="text-zinc-300">Latência p50:<span className="text-blue-400"> 25ms</span>  p95: <span className="text-blue-400">31ms</span></p>
+                <p className="text-zinc-300">Consumo:     <span className="text-yellow-400">9.1W</span></p>
+                <p className="text-zinc-300">Acurácia:    <span className="text-purple-400">98.8%</span> vs baseline FP32</p>
               </div>
-              <p className="text-zinc-600 text-xs mt-2">Estimativa baseada em 412 runs validados em produção</p>
+              <p className="text-zinc-600 text-xs mt-2">Resultados salvos · Publicar na comunidade? [s/N]</p>
             </div>
           </div>
         </div>
@@ -218,17 +227,31 @@ export default function HomePage() {
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
-              <Card key={f.title} hover className="flex flex-col gap-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-800">
-                    <f.icon size={20} className="text-brand-400" />
+            {FEATURES.map((f, i) => (
+              <Link key={f.title} href={f.href}>
+                <Card
+                  hover
+                  className={`flex flex-col gap-3 h-full transition-all ${
+                    i === 0
+                      ? "border-brand-700/60 bg-brand-950/20 ring-1 ring-brand-500/20 hover:ring-brand-500/40"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${i === 0 ? "bg-brand-500/20" : "bg-zinc-800"}`}>
+                      <f.icon size={20} className={i === 0 ? "text-brand-400" : "text-brand-400"} />
+                    </div>
+                    <Badge variant={f.badgeVariant} className="text-[10px]">{f.badge}</Badge>
                   </div>
-                  <Badge variant={f.badgeVariant} className="text-[10px]">{f.badge}</Badge>
-                </div>
-                <h3 className="font-semibold text-zinc-100">{f.title}</h3>
-                <p className="text-sm text-zinc-400 leading-relaxed">{f.description}</p>
-              </Card>
+                  <h3 className="font-semibold text-zinc-100">{f.title}</h3>
+                  <p className="text-sm text-zinc-400 leading-relaxed">{f.description}</p>
+                  {i === 0 && (
+                    <span className="mt-auto text-xs text-brand-400 flex items-center gap-1">
+                      Executar benchmark <ChevronRight size={11} />
+                    </span>
+                  )}
+                </Card>
+              </Link>
             ))}
           </div>
         </div>
